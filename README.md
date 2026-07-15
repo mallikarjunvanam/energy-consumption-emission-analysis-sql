@@ -37,7 +37,7 @@ The objective of this project is to analyze global energy datasets and answer ke
 
 ## 📂 Dataset
 
-The project uses four related datasets:
+The project uses five related datasets:
 
 - 🌍 Emissions
 - ⚡ Energy Production
@@ -149,7 +149,6 @@ sql-global-energy-analysis/
 - 📊 SQL Script
 - 📈 Dataset
 - 📽️ Project Presentation
-- 📷 Query Output Screenshots
 - 📄 Documentation
 
 ---
