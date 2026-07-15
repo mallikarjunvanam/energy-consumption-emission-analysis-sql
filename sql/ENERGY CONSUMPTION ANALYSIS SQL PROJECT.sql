@@ -1,0 +1,375 @@
+CREATE DATABASE ENERGYDB;
+USE ENERGYDB;
+
+-- Creating Country Table.
+CREATE TABLE COUNTRY (
+    CID VARCHAR(10) PRIMARY KEY,
+    COUNTRY VARCHAR(100) UNIQUE
+);
+
+SELECT * FROM COUNTRY;
+
+-- Creating Emission Table.
+CREATE TABLE EMISSION (
+    COUNTRY VARCHAR(100),
+    ENERGY_TYPE VARCHAR(50),
+    YEAR INT,
+    EMISSION INT,
+    PER_CAPITA_EMISSION DOUBLE,
+    FOREIGN KEY (COUNTRY)
+        REFERENCES COUNTRY(COUNTRY)
+);
+
+SELECT * FROM EMISSION;
+
+-- Creating Population Table.
+CREATE TABLE POPULATION (
+    COUNTRIES VARCHAR(100),
+    YEAR INT,
+    VALUE DOUBLE,
+    FOREIGN KEY (COUNTRIES)
+        REFERENCES COUNTRY (COUNTRY)
+);
+
+SELECT * FROM POPULATION;
+
+ALTER TABLE POPULATION
+CHANGE COLUMN COUNTRIES COUNTRY VARCHAR(100);
+
+-- Creating Production Table.
+CREATE TABLE PRODUCTION (
+    COUNTRY VARCHAR(100),
+    ENERGY VARCHAR(50),
+    YEAR INT,
+    PRODUCTION DECIMAL(10,6),
+    FOREIGN KEY (COUNTRY)
+        REFERENCES COUNTRY (COUNTRY)
+);
+
+SELECT * FROM PRODUCTION;
+
+-- Creating GDP Table.
+CREATE TABLE GDP (
+    COUNTRY VARCHAR(100),
+    YEAR INT,
+    VALUE DOUBLE,
+    FOREIGN KEY (COUNTRY)
+        REFERENCES COUNTRY (COUNTRY)
+);
+
+
+SELECT * FROM GDP;
+
+-- Creating Consumption Table.
+CREATE TABLE CONSUMPTION (
+    COUNTRY VARCHAR(100),
+    ENERGY VARCHAR(50),
+    YEAR INT,
+    CONSUMPTION DECIMAL(10,6),
+    FOREIGN KEY (COUNTRY)
+        REFERENCES COUNTRY (COUNTRY)
+);
+
+SELECT * FROM CONSUMPTION;
+
+SELECT * FROM CONSUMPTION;
+SELECT * FROM COUNTRY;
+SELECT * FROM EMISSION;
+SELECT * FROM POPULATION;
+SELECT * FROM PRODUCTION;
+SELECT * FROM GDP;
+
+-- DATA ANALYSIS
+-- 1. What is the total emission per country for the most recent year available?
+SELECT E.COUNTRY, SUM(E.EMISSION) AS TOT_EMISSION
+FROM EMISSION E
+WHERE E.YEAR =  (SELECT MAX(YEAR) FROM EMISSION)
+GROUP BY E.COUNTRY
+ORDER BY TOT_EMISSION DESC;
+
+-- 2. What are the top 5 countries by GDP in the most recent year?
+SELECT G.COUNTRY, G.VALUE AS TOP_GDP
+FROM GDP G
+WHERE G.YEAR = (SELECT MAX(YEAR) FROM GDP)
+ORDER BY G.VALUE DESC
+LIMIT 5;
+
+-- 3. Compare energy production and consumption by country and year.
+SELECT COUNTRY,
+    -- 2020
+ROUND(SUM(CASE WHEN YEAR = 2020 THEN PRODUCTION ELSE 0 END), 2) AS PROD_2020,
+ROUND(SUM(CASE WHEN YEAR = 2020 THEN CONSUMPTION ELSE 0 END), 2) AS CONS_2020,
+-- 2021
+ROUND(SUM(CASE WHEN YEAR = 2021 THEN PRODUCTION ELSE 0 END), 2) AS PROD_2021,
+ROUND(SUM(CASE WHEN YEAR = 2021 THEN CONSUMPTION ELSE 0 END), 2) AS CONS_2021,
+-- 2022
+ROUND(SUM(CASE WHEN YEAR = 2022 THEN PRODUCTION ELSE 0 END), 2) AS PROD_2022,
+ROUND(SUM(CASE WHEN YEAR = 2022 THEN CONSUMPTION ELSE 0 END), 2) AS CONS_2022,
+-- 2023
+ROUND(SUM(CASE WHEN YEAR = 2023 THEN PRODUCTION ELSE 0 END), 2) AS PROD_2023,
+ROUND(SUM(CASE WHEN YEAR = 2023 THEN CONSUMPTION ELSE 0 END), 2) AS CONS_2023
+FROM (
+    -- Production data
+    SELECT COUNTRY, YEAR, SUM(PRODUCTION) AS PRODUCTION, 0 AS CONSUMPTION
+    FROM PRODUCTION
+    GROUP BY COUNTRY, YEAR
+    UNION ALL
+    -- Consumption data
+    SELECT COUNTRY, YEAR, 0 AS PRODUCTION, SUM(CONSUMPTION) AS CONSUMPTION
+    FROM CONSUMPTION
+    GROUP BY COUNTRY, YEAR
+) AS combined
+GROUP BY COUNTRY
+ORDER BY PROD_2023 DESC;
+        
+-- 4. Which energy types contribute most to emissions across all countries?
+SELECT ENERGY_TYPE, SUM(EMISSION) AS ENERGY_TYPE_CONTRIBUTORS
+FROM EMISSION
+GROUP BY ENERGY_TYPE
+ORDER BY ENERGY_TYPE_CONTRIBUTORS DESC;
+
+-- 5. How have global emissions changed year over year?
+SELECT YEAR,
+SUM(EMISSION) AS TOP_EMISSION,
+SUM(EMISSION) - LAG(SUM(EMISSION)) OVER (ORDER BY YEAR) 
+FROM EMISSION
+GROUP BY YEAR;
+  
+ -- 6. What is the trend in GDP for each country over the given years?
+SELECT COUNTRY,
+    SUM(CASE WHEN YEAR = 2020 THEN VALUE ELSE 0 END) AS `2020`,
+    SUM(CASE WHEN YEAR = 2021 THEN VALUE ELSE 0 END) AS `2021`,
+    SUM(CASE WHEN YEAR = 2022 THEN VALUE ELSE 0 END) AS `2022`,
+    SUM(CASE WHEN YEAR = 2023 THEN VALUE ELSE 0 END) AS `2023`,
+    SUM(CASE WHEN YEAR = 2024 THEN VALUE ELSE 0 END) AS `2024`
+FROM GDP
+GROUP BY COUNTRY
+ORDER BY `2024` DESC;
+
+-- 7. How has population growth affected total emissions in each country?
+SELECT 
+    E.COUNTRY,
+    MAX(P.VALUE) AS POPULATION,
+    SUM(E.EMISSION) AS EMISSION,
+    ROUND(SUM(E.EMISSION) / MAX(P.VALUE),4) AS PER_CAPITA
+FROM EMISSION E
+JOIN POPULATION P 
+    ON E.COUNTRY = P.COUNTRY 
+    AND E.YEAR = P.YEAR
+WHERE E.YEAR = 2023
+GROUP BY E.COUNTRY
+ORDER BY EMISSION DESC;
+
+-- 8. Has energy consumption increased or decreased over the years for major economies?
+SELECT COUNTRY,
+    ROUND(SUM(CASE WHEN YEAR = 2020 THEN CONSUMPTION ELSE 0 END),1) AS `2020`,
+    ROUND(SUM(CASE WHEN YEAR = 2021 THEN CONSUMPTION ELSE 0 END),1) AS `2021`,
+    ROUND(SUM(CASE WHEN YEAR = 2022 THEN CONSUMPTION ELSE 0 END),1) AS `2022`,
+    ROUND(SUM(CASE WHEN YEAR = 2023 THEN CONSUMPTION ELSE 0 END),1) AS `2023`
+FROM CONSUMPTION
+GROUP BY COUNTRY
+ORDER BY `2023` DESC;
+
+-- 9. What is the average yearly change in emissions per capita for each country?
+WITH per_capita AS (
+    SELECT 
+        COUNTRY,
+        YEAR,
+        MAX(PER_CAPITA_EMISSION) AS EMISSION_PC
+    FROM EMISSION
+    GROUP BY COUNTRY, YEAR
+),
+changes AS (
+    SELECT 
+        COUNTRY,
+        YEAR,
+        EMISSION_PC - LAG(EMISSION_PC) OVER (
+            PARTITION BY COUNTRY ORDER BY YEAR
+        ) AS CHANGE_VAL
+    FROM per_capita
+)
+SELECT 
+    COUNTRY,
+    SUM(CASE WHEN YEAR = 2021 THEN CHANGE_VAL ELSE 0 END) AS CHG_2021,
+    SUM(CASE WHEN YEAR = 2022 THEN CHANGE_VAL ELSE 0 END) AS CHG_2022,
+    SUM(CASE WHEN YEAR = 2023 THEN CHANGE_VAL ELSE 0 END) AS CHG_2023
+FROM changes
+GROUP BY COUNTRY
+ORDER BY COUNTRY;
+
+-- Ratio & Per Capita Analysis
+
+-- 10. What is the emission-to-GDP ratio for each country by year?
+SELECT E.COUNTRY,
+    ROUND(SUM(E.EMISSION) / MAX(G.VALUE),3) AS EMISSION_GDP_RATIO
+FROM EMISSION E
+JOIN GDP G 
+    ON E.COUNTRY = G.COUNTRY 
+    AND E.YEAR = G.YEAR
+WHERE E.YEAR = 2023
+GROUP BY E.COUNTRY
+ORDER BY EMISSION_GDP_RATIO DESC;
+
+-- 11. What is the energy consumption per capita for each country over the last decade?
+SELECT COUNTRY,
+    ROUND(SUM(CASE WHEN YEAR = 2020 THEN CONS_PC ELSE 0 END), 6) AS `2020`,
+    ROUND(SUM(CASE WHEN YEAR = 2021 THEN CONS_PC ELSE 0 END), 6) AS `2021`,
+    ROUND(SUM(CASE WHEN YEAR = 2022 THEN CONS_PC ELSE 0 END), 6) AS `2022`,
+    ROUND(SUM(CASE WHEN YEAR = 2023 THEN CONS_PC ELSE 0 END), 6) AS `2023`
+FROM (
+    SELECT 
+        C.COUNTRY,
+        C.YEAR,
+        SUM(C.CONSUMPTION) / MAX(P.VALUE) AS CONS_PC
+    FROM CONSUMPTION C
+    JOIN POPULATION P
+        ON C.COUNTRY = P.COUNTRY
+        AND C.YEAR = P.YEAR
+    GROUP BY C.COUNTRY, C.YEAR
+) AS per_capita   
+GROUP BY COUNTRY
+ORDER BY `2023` DESC;
+
+-- 12. How does energy production per capita vary across countries?
+SELECT 
+    PR.COUNTRY,
+    ROUND(SUM(PR.PRODUCTION) / MAX(P.VALUE), 6) AS PRODUCTION_PER_CAPITA
+FROM PRODUCTION PR
+JOIN POPULATION P
+    ON PR.COUNTRY = P.COUNTRY
+    AND PR.YEAR = P.YEAR
+WHERE PR.YEAR = 2023
+GROUP BY PR.COUNTRY
+ORDER BY PRODUCTION_PER_CAPITA DESC;
+
+-- 13. Which countries have the highest energy consumption relative to GDP?
+SELECT C.COUNTRY,
+    ROUND(SUM(C.CONSUMPTION) / MAX(G.VALUE), 6) AS CONSUMPTION_GDP_RATIO
+FROM CONSUMPTION C
+JOIN GDP G
+    ON C.COUNTRY = G.COUNTRY
+    AND C.YEAR = G.YEAR
+WHERE C.YEAR = 2023
+GROUP BY C.COUNTRY
+ORDER BY CONSUMPTION_GDP_RATIO DESC;
+ 
+-- 14. What is the correlation between GDP growth and energy production growth?
+WITH production_yearly AS (
+    SELECT COUNTRY, YEAR,
+        SUM(PRODUCTION) AS total_production
+    FROM PRODUCTION
+    GROUP BY COUNTRY, YEAR
+),
+production_growth AS (
+    SELECT COUNTRY, YEAR,
+        (total_production - LAG(total_production) OVER (PARTITION BY COUNTRY ORDER BY YEAR)) /
+        LAG(total_production) OVER (PARTITION BY COUNTRY ORDER BY YEAR) AS prod_growth
+    FROM production_yearly
+),
+gdp_growth AS (
+    SELECT COUNTRY, YEAR,
+        (VALUE - LAG(VALUE) OVER (PARTITION BY COUNTRY ORDER BY YEAR)) /
+        LAG(VALUE) OVER (PARTITION BY COUNTRY ORDER BY YEAR) AS gdp_growth
+    FROM GDP
+)
+SELECT g.COUNTRY,
+    (
+        AVG(g.gdp_growth * p.prod_growth)
+        - AVG(g.gdp_growth) * AVG(p.prod_growth)
+    ) /
+    (
+        STDDEV(g.gdp_growth) * STDDEV(p.prod_growth)
+    ) AS correlation
+FROM gdp_growth g
+JOIN production_growth p
+    ON g.COUNTRY = p.COUNTRY
+    AND g.YEAR = p.YEAR
+WHERE g.gdp_growth IS NOT NULL
+  AND p.prod_growth IS NOT NULL
+GROUP BY g.COUNTRY
+ORDER BY correlation DESC;
+
+-- Global Comparisons
+-- 15. What are the top 10 countries by population and how do their emissions compare?
+WITH latest_population AS (
+    SELECT COUNTRY, VALUE AS population
+    FROM POPULATION
+    WHERE YEAR = (SELECT MAX(YEAR) FROM POPULATION)
+),
+top_10 AS (
+    SELECT COUNTRY, population
+    FROM latest_population
+    ORDER BY population DESC
+    LIMIT 10
+),
+emission_data AS (
+    SELECT COUNTRY, SUM(EMISSION) AS total_emission
+    FROM EMISSION
+    WHERE YEAR = (SELECT MAX(YEAR) FROM EMISSION)
+    GROUP BY COUNTRY
+)
+SELECT t.COUNTRY,
+       t.population,
+       e.total_emission,
+       ROUND((e.total_emission / t.population),4) AS emission_per_capita
+FROM top_10 t
+LEFT JOIN emission_data e
+  ON t.COUNTRY = e.COUNTRY
+ORDER BY t.population DESC;
+
+-- 16. Which countries have improved (reduced) their per capita emissions the most over the last decade?
+WITH per_capita AS (
+    SELECT E.COUNTRY, E.YEAR,
+        ROUND(SUM(E.EMISSION) / MAX(P.VALUE),4) AS per_capita_emission
+    FROM EMISSION E
+    JOIN POPULATION P
+        ON E.COUNTRY = P.COUNTRY
+        AND E.YEAR = P.YEAR
+    GROUP BY E.COUNTRY, E.YEAR
+),
+
+start_end AS (
+    SELECT COUNTRY,
+        MIN(YEAR) AS start_year,
+        MAX(YEAR) AS end_year
+    FROM per_capita
+    GROUP BY COUNTRY
+)
+
+SELECT s.COUNTRY,
+    d.per_capita_emission AS start_value,
+    e.per_capita_emission AS end_value,
+    ROUND((d.per_capita_emission - e.per_capita_emission),4) AS reduction
+FROM start_end s
+JOIN per_capita d
+    ON s.COUNTRY = d.COUNTRY 
+    AND s.start_year = d.YEAR
+JOIN per_capita e
+    ON s.COUNTRY = e.COUNTRY 
+    AND s.end_year = e.YEAR
+ORDER BY reduction DESC;
+
+-- 17. What is the global share (%) of emissions by country?
+SELECT COUNTRY,
+       ROUND(SUM(EMISSION) * 100.0 /
+       (SELECT SUM(EMISSION) FROM EMISSION),2) AS emission_share_percent
+FROM EMISSION
+GROUP BY COUNTRY
+ORDER BY emission_share_percent DESC;
+
+-- 18. What is the global average GDP, emission, and population by year?
+SELECT g.YEAR,
+       ROUND(AVG(g.VALUE),2) AS avg_gdp,
+       ROUND(AVG(e.total_emission),2) AS avg_emission,
+       ROUND(AVG(p.VALUE),2) AS avg_population
+FROM GDP g
+JOIN (
+    SELECT COUNTRY, YEAR, SUM(EMISSION) AS total_emission
+    FROM EMISSION
+    GROUP BY COUNTRY, YEAR
+) e
+  ON g.COUNTRY = e.COUNTRY AND g.YEAR = e.YEAR
+JOIN POPULATION p
+  ON g.COUNTRY = p.COUNTRY AND g.YEAR = p.YEAR
+GROUP BY g.YEAR
+ORDER BY g.YEAR;
