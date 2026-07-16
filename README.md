@@ -37,8 +37,9 @@ The objective of this project is to analyze global energy datasets and answer ke
 
 ## 📂 Dataset
 
-The project uses five related datasets:
+The project uses six related datasets:
 
+- 🏳️Country
 - 🌍 Emissions
 - ⚡ Energy Production
 - ⚡ Energy Consumption
